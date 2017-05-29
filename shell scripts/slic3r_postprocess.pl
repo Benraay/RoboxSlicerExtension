@@ -11,11 +11,13 @@ my @lines;
 
 my $inputFile = $ARGV[0];
 my $tempFile = "$inputFile.tmp";
+my $logFile = "$inputFile-log.log";
 
 print $inputFile;
 
 open(INPUT, "< $inputFile")         or die "can't open $inputFile: $!";
 open(NEW, "> $tempFile")         or die "can't open $tempFile: $!";
+open(LOG, "> $logFile")         or die "can't open $logFile: $!";
 
 while (<INPUT>) {
 	if (/^(;LAYER:)/) {
@@ -48,7 +50,7 @@ while (<INPUT>) {
 	if (/(X([\-0-9\.]+)\s+Y([\-0-9\.]+))/){
 		my $newX = $2;
 		my $newY = $3;
-		
+
 		$commandDistance = sqrt((($newX - $currentX)**2) + (($newY - $currentY)**2));
 	}
 
@@ -83,7 +85,7 @@ while (<INPUT>) {
 		#$extrusionAfterRetraction = 0;
 	} elsif (/^(G1\s+E([\-0-9\.]+)\s+F([0-9]+))/){
 		#retraction/unretraction
-		
+
 		my $extrusion = $2;
 		my $feedrate = $3;
 		# Don't print travel moves before a retraction
@@ -97,7 +99,7 @@ while (<INPUT>) {
 			printf NEW "G1 F%s E%s\n", $feedrate, $extrusion;
 
 			$retractCount ++;
-		
+
 			if($extrusion > 0){
 				$extrusionAfterRetraction = 0;
 			}
@@ -108,7 +110,7 @@ while (<INPUT>) {
 		$currentSpeed = $2;
 	} elsif (/^(G1\s+X([\-0-9\.]+)\s+Y([\-0-9\.]+)\sF([0-9]+))/){
 		# Show travel moves as G0
-		
+
 		# Don't repeat travel moves
 		if($lastMoveWasTravel > 0){
 			seek(NEW, $travelMoveLastFileSize, 0);
@@ -116,12 +118,12 @@ while (<INPUT>) {
 		else {
 			$travelMoveLastFileSize = tell(NEW);
 		}
-		
+
 		if($commandDistance < $MIN_TRAVEL_DISTANCE){
 			# Ignore, as this distance is too small for the postprocessor to handle
 		}
 		else {
-		
+
 			if(($lastMoveWasRetract == 0) && ($outputZ == 0)){
 				if($outputZ == 1){
 					printf NEW "G1 F%s X%s Y%s Z%s\n", $4, $2, $3, $currentZ;
@@ -143,7 +145,7 @@ while (<INPUT>) {
 					printf NEW "G0 F%s X%s Y%s\n", $4, $2, $3;
 				}
 				$lastMoveWasTravel = 2;
-		
+
 				# Reset current extrusion length if we've just travelled, ignore if travel is part of retraction'
 				if($lastMoveWasRetract == 0){
 					$extrusionAfterRetraction = 0;
@@ -160,12 +162,12 @@ while (<INPUT>) {
 			print NEW ";TYPE:$hint\n";
 			$oldHint = $hint;
 		}
-		
+
 		if(($2 == $currentX) && ($3 == $currentY)){
 			# Don't output zero distance moves
 		}
 		else {
-		
+
 			if($currentSpeed == 0){
 				printf NEW "G1 X%s Y%s E%s \n", $2, $3, $4;
 			}
@@ -174,11 +176,24 @@ while (<INPUT>) {
 				$currentSpeed = 0;
 			}
 			$extrusionAfterRetraction += $4;
-		}		
-	} else {
+		}
+	#} elsif (/^((\w+)(\s+[A-Z]+[\-0-9\.]+)+\s+F([0-9]+))/){
+	}elsif(/^(G1\s+X([\-0-9\.]+)\s+Y([\-0-9\.]+)\s+E([\-0-9\.]+)\sF([0-9]+))/){
+		printf LOG "My special one ! : %s",$_ ;
+		printf LOG "My special one speed ! : %s\n",$5 ;
+		if($currentSpeed == 0){
+			printf NEW "G1 X%s Y%s E%s \n", $2, $3, $4;
+		}
+		else {
+			printf NEW "G1 F%s X%s Y%s E%s \n", $currentSpeed, $2, $3, $4;
+			$currentSpeed = 0;
+		}
+		printf NEW "G1 F%s X%s Y%s E%s \n", $5,$2, $3, $4;
+	}else {
+		printf LOG "No change : %s",$_ ;
 		print NEW $_;
 	}
-	
+
 	# Save the current position
 	if (/(X([\-0-9\.]+)\s+Y([\-0-9\.]+))/){
 		$currentX = $2;
@@ -193,10 +208,8 @@ while (<INPUT>) {
 	}
 }
 
-
+close(LOG)       or die "can't close $logFile: $!";
 close(INPUT)                  or die "can't close $inputFile: $!";
 close(NEW)                  or die "can't close $tempFile: $!";
 rename($inputFile, "$inputFile.orig")   or die "can't rename $inputFile to $inputFile.orig: $!";
 rename($tempFile, $inputFile)          or die "can't rename $tempFile to $inputFile: $!";
-
-
