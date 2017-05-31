@@ -57,7 +57,7 @@ while (<INPUT>) {
 	if (/(X([\-0-9\.]+)\s+Y([\-0-9\.]+))/){
 		my $newX = $2;
 		my $newY = $3;
-		
+
 		$commandDistance = sqrt((($newX - $currentX)**2) + (($newY - $currentY)**2));
 	}
 
@@ -75,9 +75,9 @@ while (<INPUT>) {
 		# Remove use absolute coordinates
 	} elsif (/^(M83\s)/) {
 		# Remove use relative distances for extrusion
-	} elsif (/^(DISABLED_G1\s+)/){ 
+	} elsif (/^(DISABLED_G1\s+)/){
 		EXIT_IF:{
-		
+
 			# Grab all possible commands
 			if(/(X([\-0-9\.]+)\s)/) {$commandX = $2} else {$commandX = 'false'}
 			if(/(Y([\-0-9\.]+)\s)/) {$commandY = $2} else {$commandY = 'false'}
@@ -85,8 +85,9 @@ while (<INPUT>) {
 			if(/(E([\-0-9\.]+)\s)/) {$commandE = $2} else {$commandE = 'false'}
 			if(/(F([\-0-9\.]+)\s)/) {$commandSpeed = $2} else {$commandSpeed = 'false'}
 			if(/;\s+(.+)$/) {$comment = $2} else {$comment = 'false'}
-		
+
 			# Output hints
+			if($comment eq "skirt") { $hint = "SKIRT";}
 			if($comment eq "brim") { $hint = "SKIRT";}
 			if($comment eq "perimeter") { $hint = "WALL-OUTER"; }
 			if($comment eq "infill") { $hint = "SKIN"; }
@@ -96,12 +97,12 @@ while (<INPUT>) {
 				$oldHint = $hint;
 				last;	# Break out of the if statement
 			}
-		
+
 			if($commandSpeed != 'false'){
 			}
-		
 
-		}	
+
+		}
 	} elsif (/^(G1\s+Z([0-9\.]+)\s+)/){
 		# Layer change code
 		$currentZ = $2;
@@ -124,7 +125,7 @@ while (<INPUT>) {
 		#$extrusionAfterRetraction = 0;
 	} elsif (/^(G1\s+E([\-0-9\.]+)\s+F([0-9]+))/){
 		#retraction/unretraction
-		
+
 		my $extrusion = $2;
 		my $feedrate = $3;
 		# Don't print travel moves before a retraction
@@ -138,7 +139,7 @@ while (<INPUT>) {
 			printf NEW "G1 F%s E%s\n", $feedrate, $extrusion;
 
 			$retractCount ++;
-		
+
 			if($extrusion > 0){
 				$extrusionAfterRetraction = 0;
 				$retracted = 0;
@@ -153,7 +154,7 @@ while (<INPUT>) {
 		$currentSpeed = $2;
 	} elsif (/^(G1\s+X([\-0-9\.]+)\s+Y([\-0-9\.]+)\sF([0-9]+))/){
 		# Show travel moves as G0
-		
+
 		# Don't repeat travel moves
 		if($lastMoveWasTravel > 0){
 			seek(NEW, $travelMoveLastFileSize, 0);
@@ -161,12 +162,12 @@ while (<INPUT>) {
 		else {
 			$travelMoveLastFileSize = tell(NEW);
 		}
-		
+
 		if($commandDistance < $MIN_TRAVEL_DISTANCE){
 			# Ignore, as this distance is too small for the postprocessor to handle
 		}
 		else {
-		
+
 			if(($retracted == 0) && ($outputZ == 0)){
 				if($outputZ == 1){
 					printf NEW "G0 F%s X%s Y%s Z%s\n", $4, $2, $3, $currentZ;
@@ -192,6 +193,7 @@ while (<INPUT>) {
 		}
 	} elsif (/^(G1\s+X([\-0-9\.]+)\s+Y([\-0-9\.]+)\s+E([\-0-9\.]+)\s+;\s+(.+))$/){
 		# Output hints as to what is going on
+		if($5 eq "skirt") { $hint = "SKIRT";}
 		if($5 eq "brim") { $hint = "SKIRT";}
 		if($5 eq "perimeter") { $hint = "WALL-OUTER"; }
 		if($5 eq "infill") { $hint = "SKIN"; }
@@ -202,12 +204,12 @@ while (<INPUT>) {
 			print NEW ";TYPE:$hint\n";
 			$oldHint = $hint;
 		}
-		
+
 		if(($2 == $currentX) && ($3 == $currentY)){
 			# Don't output zero distance moves
 		}
 		else {
-		
+
 			if($currentSpeed == 0){
 				printf NEW "G1 X%s Y%s E%s \n", $2, $3, $4;
 			}
@@ -216,11 +218,11 @@ while (<INPUT>) {
 				$currentSpeed = 0;
 			}
 			$extrusionAfterRetraction += $4;
-		}		
+		}
 	} else {
 		print NEW $_;
 	}
-	
+
 	# Save the current position
 	if (/(X([\-0-9\.]+)\s+Y([\-0-9\.]+))/){
 		$currentX = $2;
@@ -240,5 +242,3 @@ close(INPUT)                  or die "can't close $inputFile: $!";
 close(NEW)                  or die "can't close $tempFile: $!";
 rename($inputFile, "$inputFile.orig")   or die "can't rename $inputFile to $inputFile.orig: $!";
 rename($tempFile, $inputFile)          or die "can't rename $tempFile to $inputFile: $!";
-
-
