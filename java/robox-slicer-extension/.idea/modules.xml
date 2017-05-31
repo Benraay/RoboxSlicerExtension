@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/robox-slicer-control/src/main/main.iml" filepath="$PROJECT_DIR$/robox-slicer-control/src/main/main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/robox-slicer-flow/src/main/main1.iml" filepath="$PROJECT_DIR$/robox-slicer-flow/src/main/main1.iml" />
+      <module fileurl="file://$PROJECT_DIR$/robox-slicer-control/robox-slicer-control.iml" filepath="$PROJECT_DIR$/robox-slicer-control/robox-slicer-control.iml" />
+      <module fileurl="file://$PROJECT_DIR$/robox-slicer-extension.iml" filepath="$PROJECT_DIR$/robox-slicer-extension.iml" />
+      <module fileurl="file://$PROJECT_DIR$/robox-slicer-flow/robox-slicer-flow.iml" filepath="$PROJECT_DIR$/robox-slicer-flow/robox-slicer-flow.iml" />
+    </modules>
+  </component>
+</project>
