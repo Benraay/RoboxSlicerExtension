@@ -59,15 +59,14 @@ public class PostProcessor {
 
         while (sc.hasNextLine()) {
             String strLine = sc.nextLine();
-            Matcher m = Pattern.compile("(X([\\-0-9\\.]+)\\s+Y([\\-0-9\\.]+))").matcher(strLine);
-            if (m.find()){
+            Matcher m;
+            if ((m = Pattern.compile("(X([\\-0-9\\.]+)\\s+Y([\\-0-9\\.]+))").matcher(strLine)).find()){
                 double newX = Double.parseDouble(m.group(2));
                 double newY = Double.parseDouble(m.group(3));
 
                 commandDistance = Math.sqrt(Math.pow(newX - currentX, 2) + Math.pow(newY - currentY, 2));
             }
-            m = Pattern.compile("^(M204\\s+S(\\d+))").matcher(strLine);
-            if (m.find()) {
+            if ((m = Pattern.compile("^(M204\\s+S(\\d+))").matcher(strLine)).find()) {
                 //printf NEW "M201 X%d Y%d Z%d E2000\n", $2, $2, $2;
                 printer.write(String.format("M201 X%d Y%d Z%d E2000\n",m.group(2),m.group(2),m.group(2)));
             } else if (Pattern.compile("^(M190\\s)").matcher(strLine).find()) {
