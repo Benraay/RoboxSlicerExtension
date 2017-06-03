@@ -1,6 +1,7 @@
 package com.roboxing.slicerextension.control;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.regex.*;
 
@@ -8,12 +9,16 @@ import java.util.regex.*;
  * Created by benjaminraaymakers on 03/06/2017.
  */
 public class PostProcessor {
+
+    private RandomAccessFile output;
+
     public PostProcessor(String gcodeFileToProcess) throws IOException {
 
         File input = new File(gcodeFileToProcess);
-        File output = new File(gcodeFileToProcess+".tmp");
-        Scanner sc = new Scanner(input);
-        PrintWriter printer = new PrintWriter(output);
+        output = new RandomAccessFile(gcodeFileToProcess+".tmp", "rw");
+        output.setLength(0);
+        Scanner sc = new Scanner(input,"UTF-8");
+        //PrintWriter printer = new PrintWriter(output);
 
         int layerCount=0;
 
@@ -29,7 +34,7 @@ public class PostProcessor {
         //reset scanner
         sc = new Scanner(input);
 
-        double minExtrusionLenght = 0.3;		// Minimum extrusion length before we will allow a retraction
+        double minExtrusionLength = 0.3;		// Minimum extrusion length before we will allow a retraction
         double minTravelDistance = 0.01;  // Minimum distance of travel before we actually take the command seriously
 
         String oldHint = "";
@@ -42,7 +47,7 @@ public class PostProcessor {
         boolean layerChange = false;
         int currentSpeed = 0;
         int retractCount = 0;
-        int travelMoveLastFileSize = 0;
+        long travelMoveLastFileSize = 0;
         int lastMoveWasTravel = 0;
         int lastMoveWasRetract = 0;
         double extrusionAfterRetraction = 0;
@@ -68,7 +73,7 @@ public class PostProcessor {
             }
             if ((m = Pattern.compile("^(M204\\s+S(\\d+))").matcher(strLine)).find()) {
                 //printf NEW "M201 X%d Y%d Z%d E2000\n", $2, $2, $2;
-                printer.write(String.format("M201 X%d Y%d Z%d E2000\n",m.group(2),m.group(2),m.group(2)));
+                writeOutput(String.format("M201 X%d Y%d Z%d E2000\n", m.group(2), m.group(2), m.group(2)));
             } else if (Pattern.compile("^(M190\\s)").matcher(strLine).find()) {
                 // Remove bed temperature settings
             } else if (Pattern.compile("^(M104\\s)").matcher(strLine).find()) {
@@ -97,24 +102,24 @@ public class PostProcessor {
                     {comment = m.group(2);} else {comment = "false";}
 
                 // Output hints
-                if(comment == "skirt") { hint = "SKIRT";}
-                if(comment == "brim") { hint = "SKIRT";}
-                if(comment == "perimeter") { hint = "WALL-OUTER"; }
-                if(comment == "infill") { hint = "SKIN"; }
+                if(comment.equals("skirt")) { hint = "SKIRT";}
+                if(comment.equals("brim")) { hint = "SKIRT";}
+                if(comment.equals("perimeter")) { hint = "WALL-OUTER"; }
+                if(comment.equals("infill")) { hint = "SKIN"; }
 
                 if(hint != oldHint){
-                    printer.write(";TYPE:"+hint+"\n");
+                    writeOutput(";TYPE:" + hint + "\n");
                     oldHint = hint;
                     break;	// Break out of the if statement
                 }
 
                 if(commandSpeed != "false"){
                 }
-            } else if (Pattern.compile("^(G1\\s+Z([0-9\\.]+)\\s+)").matcher(strLine).find()){
+            } else if ((m=Pattern.compile("^(G1\\s+Z([0-9\\.]+)\\s+)").matcher(strLine)).find()){
                 // Layer change code
                 currentZ = Double.parseDouble(m.group(2));
                 if(retracted){
-                    printer.write(String.format("G0 X%s Y%s Z%s \n",currentX,currentY,currentZ));
+                    writeOutput(String.format("G0 X%s Y%s Z%s \n", currentX, currentY, currentZ));
                 }
                 else {
                     outputZ = true;
@@ -123,28 +128,29 @@ public class PostProcessor {
                 oldHint = "";
             } else if (Pattern.compile("^(;LAYER:0)").matcher(strLine).find()) {
                 // Output the layer count
-                printer.write(String.format(";Layer count: %d\n",layerCount));
-                printer.write(strLine);
+                writeOutput(String.format(";Layer count: %d\n", layerCount));
+                writeOutput(strLine+"\n");
                 extrusionAfterRetraction = 0;
             } else if (Pattern.compile("^(;LAYER:)").matcher(strLine).find()) {
                 // Output the layer number
-                printer.write(strLine);
+                writeOutput(strLine+"\n");
                 //$extrusionAfterRetraction = 0;
             } else if ((m = Pattern.compile("^(G1\\s+E([\\-0-9\\.]+)\\s+F([0-9]+))").matcher(strLine)).find()){
                 //retraction/unretraction
 
                 double extrusion = Double.parseDouble(m.group(2));
-                double feedRate = Double.parseDouble(m.group(3));
+                int feedRate = Integer.parseInt(m.group(3));
                 // Don't print travel moves before a retraction
                 if((lastMoveWasTravel > 0) && (extrusion < 0)){
                     //TODO find a simple way to do the SEEK !!
+                    output.seek(travelMoveLastFileSize);
                     //seek(NEW, travelMoveLastFileSize, 0);
                 }
 
                 // Ensure that we remove the first retract/unretract pair
                 // Ensure that we leave enough room for slowly closing a nozzle before retracting
-                if((extrusionAfterRetraction > minExtrusionLenght) || (retracted)){
-                    printer.write(String.format("G1 F%s E%s\n",feedRate,extrusion));
+                if((extrusionAfterRetraction > minExtrusionLength) || (retracted)){
+                    writeOutput(String.format("G1 F%s E%s\n", feedRate, extrusion));
                     retractCount ++;
 
                     if(extrusion > 0){
@@ -166,10 +172,12 @@ public class PostProcessor {
                 if(lastMoveWasTravel > 0){
                     //TODO SEEK
                     //seek(NEW, travelMoveLastFileSize, 0);
+                    output.seek(travelMoveLastFileSize);
                 }
                 else {
                     //TODO TELL !!
                     //travelMoveLastFileSize = tell(NEW);
+                    travelMoveLastFileSize = output.length();
                 }
 
                 if(commandDistance < minTravelDistance){
@@ -179,20 +187,20 @@ public class PostProcessor {
 
                     if(!retracted && !outputZ){
                         if(outputZ){
-                            printer.write(String.format("G0 F%s X%s Y%s Z%s\n",m.group(4), m.group(2),m.group(3),currentZ));
+                            writeOutput(String.format("G0 F%s X%s Y%s Z%s\n", m.group(4), m.group(2), m.group(3), currentZ));
                             outputZ = false;
                             extrusionAfterRetraction = 0;
                         } else {
-                            printer.write(String.format("G0 F%s X%s Y%s E0.00\n",m.group(4), m.group(2),m.group(3)));
+                            writeOutput(String.format("G0 F%s X%s Y%s E0.00\n", m.group(4), m.group(2), m.group(3)));
                             lastMoveWasTravel = 2;
                         }
                     } else {
                         if(outputZ){
-                            printer.write(String.format("G0 F%s X%s Y%s Z%s\n",m.group(4), m.group(2),m.group(3),currentZ));
+                            writeOutput(String.format("G0 F%s X%s Y%s Z%s\n", m.group(4), m.group(2), m.group(3), currentZ));
                             outputZ = false;
                         }
                         else {
-                            printer.write(String.format("G0 F%s X%s Y%s\n",m.group(4), m.group(2),m.group(3)));
+                            writeOutput(String.format("G0 F%s X%s Y%s\n", m.group(4), m.group(2), m.group(3)));
                         }
                         lastMoveWasTravel = 2;
                     }
@@ -200,15 +208,21 @@ public class PostProcessor {
             } else if ((m = Pattern.compile("^(G1\\s+X([\\-0-9\\.]+)\\s+Y([\\-0-9\\.]+)\\s+E([\\-0-9\\.]+)\\s+;\\s+(.+))$").matcher(strLine)).find()){
                 // Output hints as to what is going on
                 String currentHint = m.group(5);
-                if(currentHint == "skirt") { hint = "SKIRT";}
-                if(currentHint == "brim") { hint = "SKIRT";}
-                if(currentHint == "perimeter") { hint = "WALL-OUTER"; }
-                if(currentHint == "infill") { hint = "SKIN"; }
-                if(currentHint == "support material") { hint = "SUPPORT"; }
-                if(currentHint == "support material interface") { hint = "SUPPORT"; }
+                if(currentHint.equals("skirt"))
+                    hint = "SKIRT";
+                if(currentHint.equals("brim"))
+                    hint = "SKIRT";
+                if(currentHint.equals("perimeter"))
+                    hint = "WALL-OUTER";
+                if(currentHint.equals("infill"))
+                    hint = "SKIN";
+                if(currentHint.equals("support material"))
+                    hint = "SUPPORT";
+                if(currentHint.equals("support material interface"))
+                    hint = "SUPPORT";
 
-                if(hint != oldHint){
-                    printer.write(String.format(";TYPE:%s\n", hint));
+                if(!hint.equals(oldHint)){
+                    writeOutput(String.format(";TYPE:%s\n", hint));
                     oldHint = hint;
                 }
 
@@ -218,11 +232,11 @@ public class PostProcessor {
                 else {
 
                     if(currentSpeed == 0){
-                        printer.write(String.format("G1 X%s Y%s E%s \n", m.group(2), m.group(3), m.group(4)));
+                        writeOutput(String.format("G1 X%s Y%s E%s \n", m.group(2), m.group(3), m.group(4)));
                         //printf NEW "G1 X%s Y%s E%s \n", $2, $3, $4;
                     }
                     else {
-                        printer.write(String.format("G1 F%s X%s Y%s E%s \n",currentSpeed ,m.group(2), m.group(3), m.group(4)));
+                        writeOutput(String.format("G1 F%s X%s Y%s E%s \n", currentSpeed, m.group(2), m.group(3), m.group(4)));
                         currentSpeed = 0;
                     }
                     extrusionAfterRetraction += Double.parseDouble(m.group(4));
@@ -230,7 +244,8 @@ public class PostProcessor {
 
             } else {
                 System.out.println (strLine);
-                printer.write(strLine+"\n");
+                //StandardCharsets.UTF_8.encode(strLine).array()
+                writeOutput(strLine + "\n");
             }
 
             // Save the current position
@@ -246,5 +261,9 @@ public class PostProcessor {
                 lastMoveWasRetract --;
             }
         }
+    }
+
+    private void writeOutput(String textToWrite) throws IOException {
+        output.write(StandardCharsets.UTF_8.encode(textToWrite).array());
     }
 }
