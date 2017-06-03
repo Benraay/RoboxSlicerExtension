@@ -17,12 +17,24 @@
 */
 package com.roboxing.slicerextension.control;
 
+import java.io.File;
+import java.io.IOException;
+
 /**
  * Hello world!
  *
  */
 public class Main {
     public static void main(String[] args) {
+
         System.out.println("Hello World!");
+        String home = System.getProperty("user.home");
+        String path = home + File.separator + "CEL Robox/PrintJobs/1cf3de2619db4321/1cf3de2619db4321.gcode.orig";
+        try {
+
+            PostProcessor postProcess = new PostProcessor(path);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
